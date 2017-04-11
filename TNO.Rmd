@@ -1,0 +1,163 @@
+---
+title: "R Introduction to mixed models for multilevel data analysis"
+author: "Hicham Zmarrou, PhD"
+date:   "14 april, 2017"
+output: ioslides_presentation
+logo: img/R_logo.svg.png
+---
+
+# Overview
+
+## What are Multilevel Data?
++ Data that are hierarchically structured, nested, clustered
+
++ Data collected from units organized or observed within units
+at a higher level (from which data are also obtained)
+
+data collected on students who are clustered within classrooms
+data collected on siblings who are clustered within classrooms
+data collected on repeated observations  who are clustered within individuals
+
+==> these are examples of two-level data
+
++ level 1 - (students) - measurement of primary outcome and important mediating variables
++ level 2 - (classrooms) - provides context or organization of level-1 units which may influence outcome; other mediating
+  variables
+  
+
+## What is Multilevel Data Analysis?
+
+Any set of analytical procedures that involve data gathered from
+individuals and from the social structure in which they are
+embedded and are analyzed in a manner that models the
+multilevel structures (L. Burstein, Units of Analysis, 1985) 
+
++ analysis that models the multilevel structure
++ recognizes influence of structure on individual outcome
+
+__structure__ classroom may __influence response__ from students
+__structure__ family may __influence response__ from siblings
+__structure__ individual may __influence response__ from repeated observations
+
+
+
+## Why do Multilevel Data Analysis?
+
++ assess amount of variability due to each level (e.g., family variance and individual variance)
++ model level 1 outcome in terms of effects at both levels individual var. = fn(individual var. + family var.)
++ assess interaction between level effects (e.g., individual outcome influenced by family SES for males, not females)
++ Responses are not independent - individuals within clusters share influencing factors
+
+
+
+## Mixed models aka
++ random-effects models
++ random-coefficient models
++ multilevel models
++ hierarchical linear models
+
+Useful for analyzing
+
++ Clustered data:  subjects (level-1) within clusters (level-2) e.g., clinics, hospitals, families, worksites, schools, classrooms, city wards
++ Longitudinal data, i.e repeated measures data in which the observations are taken over time. repeated obs. (level-1) within subjects (level-2)
+
+## A simple equation for mixed-effect model 
+
+For linear regression of $Y$ versus $X$, we fit the model: 
+
+$$Y = \beta_0 + \beta_1 . X $$
+Where $\beta 's$ are the intercept and the slope of the fitted regression line. 
+A mixed-effects model additionally fits two random parametrs: 
+
+$$Y = (\beta_0 +b_0) + (\beta_1+b_1) . X $$
+Where $b_0$ is the random intercept and $b_1$ is a random slope.
+
+## Tutorial and exercises datasets 
+
+###  `The School data` 
+###  `The prefdata`
+###  `The sleep data` 
+###  `The exercise.repeated data` 
+###  `Orthodont data set` 
+
+
+## Bayesian inference with Stan 
+
++ `Stan`, named after Stanislaw Ulam, a mathematician who was one of the developers of the Monte
+Carlo method in the 1940s (Metropolis & Ulam, 1949), 
+
++ is a C++ program to perform Bayesian inference. The code is open-source and is available at http://mc-stan.org/ along with instructions and a 500-page user manual.
+
++ can be used vanuit `R`, `Python` and other statistical programming languages      
+
+## Bayesian inference with Stan 
+
+Basically all Bayesian inference problems4 are of the canonical form:
+
++  Given prior information about an unknown quantity $\theta$, express that information as a probability distribution $p(\theta)$, conventionally known as the prior;
+
++ Given data observed according to some random process depending on $\theta$, construct an appropriate likelihood $p(X|\theta)$;
+
++ Using Bayes rule, calculate a new distribution of $\theta$, conditioned on the data $X$; this distribution is conventionally known as the posterior:
+
+$$\pi(\theta|X) = \frac{p(X|\theta)p(\theta)}{p(X)} =\frac{p(X|\theta)p(\theta)}{\int p(X|\theta)p(\theta) d\theta}$$
+
+
+## Bayesian inference with Stan 
+
+The choice of prior has historically been one of the more
+controversial aspects of Bayesian analysis. Roughly, three classes of
+priors:
+
++  Informative: Provide significant information and help guide
+analysis.
+
++ Weakly Informative: Avoid pathologies, but let the data
+dominate. Similar to weak regularization in non-Bayesian
+analysis.
+
++ Non-Informative. Attempt to provide no information: hard to
+achieve in practice
+
+Warning: If you don't provide a prior, Stan will implicitly use a
+uniform (flat) prior. 
+
+## Bayesian inference with Stan 
+
+$$\pi(\theta|X) = \frac{p(X|\theta)p(\theta)}{p(X)} =\frac{p(X|\theta)p(\theta)}{\int p(X|\theta)p(\theta) d\theta}$$
+
+The denominator of this quantity (the "partition function") is often analytically intractable so we are left with
+
+$$\pi(\theta|X) \propto  p(X|\theta)p(\theta)$$
+
+How can we calculate $\mathbb{E}[F(\theta)]$ for arbitrary (measurable) $F(.)$ when we
+can only calculate $\pi$ up to a normalizing constant?
+In theory, we sample from $\pi$ and invoke the Law of Large Numbers:
+
+$$ \frac{1}{N}\sum\limits_{i=1}^n F(\theta_i)  \longrightarrow \mathbb{E}[F(\theta)]$$
+In practice, we cannot sample directly from $\pi$ either.
+
+## Bayesian inference with Stan 
+
+Not entirely true. We can (sort of) sample from $\pi$, but not IID. 
+
+We construct an (ergodic) Markov chain with transition kernel $\Pi$ chosen to have the same stationary distribution as $\pi$. Then, samples from this Markov chain are
+samples from $\pi$ if either:
+
++ We initialize the chain with a draw from $\pi$;
+
++ We run the chain long enough (infinitely long!) so that it converges to $\pi$.
+
+The first is, again, impossible. Let's look more closely at the second
+
+## Bayesian inference with Stan 
+
+A Markov chain is a map from the space of probability distributions onto itself.
+
+Given an initialization distribution (which may be a point mass) $P_0$, application of the transition kernel $\Pi$ gives a new distribution $P_1$. Repeated application gives $\{P_n\}$ which tend to $\pi$ as $n \to \infty$. 
+
+If $P_0$ is "close" to  $\pi$, the convergence is rapid.
+
+$\pi$ is the stationary point of $\Pi$ so $\Pi(\pi) = \pi$.
+
+

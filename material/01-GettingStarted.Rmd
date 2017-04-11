@@ -1,0 +1,357 @@
+---
+date: "2017-04-14"
+title: "Getting Started with Multilevel Modeling in R"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: FALSE
+  author: "Hicham Zmarrou"
+ 
+---
+
+
+
+## Setting up your enviRonment
+
+In R `lme4` is the canonical  package for implementing multilevel models in R, though there are a number of packages 
+that depend on and enhance its feature set, including Bayesian extensions. 
+To install the needed packages, we just run:
+
+```{r eval=FALSE, results='hide', echo=TRUE}
+#### Main version
+list.of.packages <- c("tidyverse", "lme4", "arm")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+```
+
+
+## The School data 
+
+School data The data set school.txt contains an amended version of the data available
+from [Jon Starkweather webpage](http://www.unt.edu/rss/class/Jon/R_SC/Module9/lmm.data.txt) . Measurements for openness, agreeableness, social ability and extroversion are provided
+for children belonging to different schools and different classes within each school. This
+means that we want to treat class and school as nested random effects. The data contains 1200 cases evenly distributed among 24 nested groups (4 classes within 6 schools). The data set is available the folder calledd data uder folder material.
+
+
+```{r loadandviewdata}
+
+suppressWarnings(suppressMessages(library(lme4))) ### load library
+suppressWarnings(suppressMessages(library(arm))) ## convenience functions for regression in R
+lmm.data <- read.table("C:/Users/Gebruiker/Dropbox/tridata/courses-R-TNO/material/data/lmm.data.txt", header=TRUE, sep=",", na.strings="NA", dec=".", strip.white=TRUE)
+##summary(lmm.data)
+head(lmm.data)
+
+```
+
+Here we have data on the __Extroversion__ of subjects nested within classes and within schools. 
+
+## Fit a multiple linear simple model 
+### Fit a fix intercept model
+ 
+Let's start by fitting a simple OLS regression of measures of openness, agreeableness, 
+and socialability on extroversion. 
+
+
+```{r nonlmermodels}
+OLSexamp <- lm(extro ~ open + agree + social, data = lmm.data)
+summary(OLSexamp)
+```
+
+So far this model does not fit very well at all (very low R-squared: and large p-value). 
+
+The `R` model interface is quite a  simple one with the dependent variable being specified first, followed by the  `~` symbol. The righ hand side, predictor variables, are each named. Addition  signs indicate that these are modeled as additive effects. Finally, we specify that dataframe on which to calculate the model. Here we use the `lm` function to perform OLS regression, but there are many other options in `R`. 
+
+The summary shows many kinds of statistics describing the regression: coefficient estimates and p-values, information about the residuals, and model statistics like _R-squared_ and the _F_ statistic. But this format isn't convenient if you want to combine and compare multiple models, or plot it using ggplot2: you need to turn it into a data frame.
+
+The `broom`  package provides [three tidying methods](http://varianceexplained.org/r/broom-intro/) for turning the contents of this object into a data frame, depending on the level of statistics you're interested in. If you want statistics about each of the coefficients fit by the model, use the tidy() method:
+
+```{r}
+library(broom)
+tidy(OLSexamp)
+```
+
+If we want to extract measures such as the AIC, you may prefer to fit a generalized linear model with `glm` which produces a model fit through maximum likelihood  estimation. Note that the model formula specification is the same. 
+
+
+```{r nonlmerglm}
+MLexamp <- glm(extro ~ open + agree + social, data=lmm.data)
+tidy(MLexamp)
+# summary(MLexamp)
+AIC(MLexamp)
+```
+
+Let's look at a simple varying intercept model now. 
+
+### Fit a varying intercept model
+
+Depending on disciplinary norms, our next step might be to fit a varying intercept  model using a grouping variable such as school or classes. Using the `glm` function  and the familiar formula:
+
+```{r nonlmerfixedeffect}
+
+MLexamp.2 <- glm(extro ~ open + agree + social + class, data=lmm.data )
+summary(MLexamp.2)
+AIC(MLexamp.2)
+
+
+```
+
+This is simply the case of  fitting a separate dummy variable as a predictor for each class. We can see 
+this does not provide much additional model fit, see the residuals. 
+
+```{r}
+anova(MLexamp, MLexamp.2, test="F")
+```
+
+
+```{r nonlmerfixedeffect2}
+MLexamp.3 <- glm(extro ~ open + agree + social + school, data=lmm.data )
+##summary(MLexamp.3)
+AIC(MLexamp.3)
+anova(MLexamp, MLexamp.3, test="F")
+```
+
+The school effect improves the model fit. However, how do we interpret these
+effects? 
+
+```{r effectbreakdown}
+table(lmm.data$school, lmm.data$class)
+
+```
+
+Here we can see we have a perfectly balanced design with fifty observations in 
+each combination of class and school (if only data were always so nice!). 
+
+Let's try to model each of these unique cells. To do this, we fit a model and use 
+the `:` operator to specify the interaction between `school` and `class`. 
+
+```{r itneraction1}
+MLexamp.4 <- glm(extro ~ open + agree + social + class + school:class, data=lmm.data )
+summary(MLexamp.4)
+AIC(MLexamp.4)
+```
+
+Let's go through each coefficient:
+
+
++ (Intercept): __Extroversion__ is expected to have a value  of 39.965 for the zero values of __open__, __agree__ and __social__ and under __class a__. This is called baseline.   
+
++ classb: __Extroversion__ value grows 5.79 under _classb_ conditions compared to the baseline.
+
++ classc: __Extroversion__ value grows 8.53 under _classc_ conditions compared to the baseline.
+
++ classd: __Extroversion__ value grows 10.39 under _classd_ conditions compared to the baseline.
+
++ classa:schoolII: effect of SchoolII in __Extroversion__ under _classa_  increase by 12.24 w.r.t schoolI.
+
+Same interpretation for _classx:schoolyy_  
+
+
+This is useful, but what if we want to understand both the effect of the school and the effect of the class, as well as the effect of the schools and classes?  Unfortunately, this is not easily done with the standard `glm`. 
+
+```{r itneraction2}
+MLexamp.5 <- glm(extro ~ open + agree + social + school*class - 1, data=lmm.data )
+summary(MLexamp.5)
+AIC(MLexamp.5)
+```
+
+## Exploring Random Slopes
+
+Another alternative is to fit a separate model for each of the school and class combinations. If we believe the relationsihp between our variables may be highly  dependent on the school and class combination, we can simply fit a series of models  and explore the parameter variation among them:
+
+```{r}
+require(plyr)
+modellist <- dlply(lmm.data, .(school, class), function(x) 
+                              glm(extro~ open + agree + social, data=x))
+tidy(modellist[[1]])
+tidy(modellist[[2]])
+
+fit <- lmList(extro~ open + agree + social|school, data=lmm.data)
+
+```
+
+### Fit a varying intercept model with lmer
+
+While all of the above techniques are valid approaches to this problem,  they are not necessarily the best approach when we are interested explicitly in  variation among and by groups. This is where a mixed-effect modeling framework  is useful. Now we use the `lmer` function with the familiar formula interface, but now group level variables are specified using a special syntax: `(1|school)`  tells `lmer` to fit a linear model with a varying-intercept group effect using the variable `school`. 
+
+#### Running the Analysis. 
+
+1. Fit the model, which is named MLexamp.6" , using the lmer function. 
+
+```{r lmer1}
+MLexamp.6 <- lmer(extro ~ open + agree + social + (1|school), data=lmm.data, REML = F)
+summary(MLexamp.6)
+```
+2. Optional arguments: 
+   + `family = gaussian`:  can be used to specify other distributions (e.g. binomial, poisson, etc.). 
+
+   + `REML = TRUE` argument is used to specify that the REstricted Maximum Likelihood criterion be used rather than the loglikelihood criterion for optimization of parameter estimates. 
+
+   +  The formula (from left to right) begins with the outcome variable then the tilde, followed by all the predictors. The first three predictors represent fixed effects and then, in parentheses each random effect is listed. `(1|school)` tells `lmer` to fit a linear model with a varying-intercept group effect using the variable school.
+   
+   + What this is saying  we assume an intercept that is different for each `school`  and `1` stands for the intercept here. You can think of this formula as telling your model that it should expect that there will be multiple responses
+per school, and these responses will depend on each `school` baseline level.
+
+  + By default, the `lmer`  function will also model the random effect for the highest level variable (school) of the
+nesting. 
+  
+  + A standard interaction term can be specified using the colon, for example (1|school:class) would
+specify a random effect (the parentheses) for the interaction of school and class (the colon).
++ Likewise, a fixed effect interaction could be specified with the colon separating the two variables; 
+
++ Examples `open:agree + open:agree:social` which would specify the interaction of `open` and `agree`, then the interaction of `open`, `agree`, and `social`; no parentheses would identify these interactions as fixed effects. 
+
+
+We can fit multiple group effects with multiple group effect terms.
+
+```{r}
+MLexamp.7 <- lmer(extro ~ open + agree + social + (1 | school) + (1 | class), 
+    data = lmm.data)
+summary(MLexamp.7)
+```
+
+And finally, we can fit nested group effect terms through the following syntax:
+
+```{r}
+MLexamp.8 <- lmer(extro ~ open + agree + social + (1 | school/class), data = lmm.data)
+summary(MLexamp.8)
+
+```
+
+Here the `(1|school/class)` says that we want to fit a mixed effect term for varying intercepts `1|` by schools, and for classes that are nested within schools.
+
+#### Interpreting the output. 
+
+
+The printed summary of a model fit with lmer has four major sections:
+
++ a description of the model that was fit, 
+
++ some statistics characterizing the model fit, `REML` criterion at convergence if REML option is `TURE` or AIC and BIC when `REML = F` 
+
++ a summary of properties of the random effects; and 
+
++ a summary of the fixed-effects parameter estimates.
+
+
+__Random effects__: Three values shown:
+
+1. the nested effect of class within school, 
+
+2. the random effect of the higher level variable (school); and 
+
+3. the residual term which represents error. 
+
+The variance estimates are of interest here because we can add them together to find the total variance (of the random effects) and then divide that total by each random effect to see what proportion of the random effect variance is attributable to each random effect (similar to `R-squared` in traditional regression). So, if we add the variance components: 
+
+```{r}
+ 8.2043 + 93.8411 + 0.9684 
+
+```
+
+divide this total variance by our nested effect variance to give us the proportion of variance
+accounted for, which indicates whether or not this effect is meaningful.
+
+```{r}
+8.2043/103.0138
+93.8411/103.0138
+```
+
++ We can see that approximately 8% of the total variance of the random effects is attributed to the nested effect. If all
+the percentages for each random effect are very small, then the random effects are not present and linear mixed
+modeling is not appropriate (i.e. remove the random effects from the model and use general linear or
+generalized linear modeling instead). 
++ We can see that the effect of school alone is quite substantial (91%): 
+
+__Fixed effects__ These estimates are interpreted the same way as one would interpret estimates from a traditional ordinary least squares linear regression. 
+
+The default output shown by the summary function (above) has elements which can be extracted and either
+viewed or assigned to an object. There are also several other elements of the lmer object which can be extracted
+and may be useful or meaningful.
+To extract the estimates of the fixed effects:
+
+
+```{r}
+fixef(MLexamp.8)
+```
+To extract the estimates of the random effect (difference of each random-effect intercept from the mean intercept at the next higher level of nesting)
+
+```{r}
+ranef(MLexamp.8)
+#tidy(ranef(MLexamp.8)$`class:school`) 
+
+```
+To extract the coefficients for the random effects intercept (2 groups of school) and each group of the random
+effect factor, which here is a nested set of groups (4 groups of class within 6 groups of school): 
+
+```{r}
+coef(MLexamp.8) 
+
+```
+ 
+
+```{r}
+ coef(MLexamp.8)$'class' 
+```
+To extract the fitted or predicted values based on the model parameters and data, here the predicted values are assigned the name yhat: 
+
+```{r}
+ yhat <- predict(MLexamp.8)
+ abs(100*(lmm.data$extro[1:10]-yhat[1:10])/ lmm.data$extro[1:10]) 
+ summary(yhat) 
+```
+To extract the residuals (errors) and summarize them, as well as plot them (they should be approximately
+normally distributed around a mean of zero): 
+
+```{r}
+library(ggplot2)
+residuals <- data.frame(resid(MLexamp.8))
+names(residuals) <- "resid"
+ggplot(residuals, aes(x=resid)) + 
+    geom_histogram(aes(y=..density..),  binwidth=.5, colour="black", fill="white") +
+    geom_density(alpha=.2, fill="#FF6666")  
+summary(residuals)
+#residuals
+```
+
+## Exercises
+
+This exercise uses the `/data/prefdata.csv` dataset. it contains measurements of leaf mass per area (LMA), and distance from the top of the tree (dfromtop) on 35 trees of two species. We want to know whether LMA decreases with dfromtop as expected, and whether this decrease in LMA with distance from top differs by species.
+ 
+ 1. read the data and inspect the first few rows, and the species variable.
+ 
+ 2. fit a linear regresion model by species (ignoring individual-level variation) 
+
+```
+lm1 <- lm(LMA ~ species + dfromtop + species:dfromtop , data = prefdata)
+summary(lm1)
+
+```
+ 3. plot the linear predictions (hint load the library visreg and use the function `visreg(lm1, "dfromtop", by = "species", overlay =TRUE)`) 
+
+ 4. Look at the anova table for the fitted linear regression model from the
+ example above to confirm that LMA does not significantly change with dfromtop. 
+
+ 5. To see whether the relationship betwee LMA and dfromtop potentially varies from tree to tree, fit a linear regression separately for each tree using the lmlist function in the `lme4` package and then plot the outcome. 
+
+```
+library(lme4)
+fit linear regression by tree 
+
+lmList1 <- lmList(LMA ~ dfromtop | ID , data = prefdata)
+
+extract the coefs (intercepts and slopes) for each tree  
+
+```
+6.  To specify random effects with `lmer` we add it to the formula in the right-hand side. For example, a random intercept for an  `ID` (that is, the intercept will vary randomly among `IDs` ) is coded as(1|ID). If we also allow the slope of the relationship to vary, we specify it as (`dfromtop|ID`) the slope and intercept of the relationship between `LMA` and `dfromtop` will vary randomly between tree `IDs`.
+ + Fit a random intercept model (`pref_m1`) only with species::dfromtop interaction 
+ + Fit a random intercept and slope model (`pref_m2`) 
+ + Use the `AIC` (Akaike Information criterion) to compare (`pref_m1`) and (`pref_m2`) and conclude that we don't need a random slope.    
+ + Conclude dat `LMA` indeed decreases with `dfromtop` 
+
+```
+lm1 <- lm(LMA ~ species + dfromtop + species:dfromtop , data = prefdata)
+summary(lm1)
+```
+
+

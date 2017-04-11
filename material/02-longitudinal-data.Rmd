@@ -1,0 +1,544 @@
+---
+date: "2017-04-14"
+title: "Using R and lmer to fit different longitudinal models"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+author: "Hicham Zmarrou"
+ 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE)
+```
+
+```{r, include = FALSE}
+htmltools::tagList(rmarkdown::html_dependency_font_awesome())
+```
+
+
+
+# Introduction
+
+In this  we gio through two examples of multilevel analyses for repeated measures. The point of this tutorial is to show how to fit and interpret these models with `lme4::lmer` in `R`, not to cover the statistical theory behind them.
+
+# Sleep study example
+
+## Data description   
+
+These data are from a laboratory study described in Belenky et al. (2003), for the sleep-deprived group and for the first 10 days of the study, up to the recovery period.
+
++ There were 18 subjects, chosen from the population of interest (long-distance truck drivers), in the 10 day trial.
+These subjects were restricted to 3 hours sleep per night during the trial.
+
++  On each day of the trial each subject's reaction day was measured. The reaction day shown here is the average of
+several measurements.
++ These data are balanced in that each subject is measured the same number of days and on the same occasions.
+
+
+```{r}
+# load the needed packages 
+
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(lattice)
+
+data(sleepstudy)
+str(sleepstudy)
+ggplot(sleepstudy, aes(Days, Reaction)) + geom_point(size=1) + geom_smooth(method="lm", se = FALSE, size = 0.5,color="darkred") + facet_wrap(~ Subject, nrow = 3) + 
+  scale_x_continuous(breaks=0:9, expand = c(0, 0)) +labs(title="",
+        x ="Days of sleep deprivation", y = "Average reaction time (ms)")
+print(xyplot(Reaction ~ Days | Subject, sleepstudy, aspect = "xy",
+                    layout = c(9,2), type = c("g", "p", "r"),
+                    index.cond = function(x,y) coef(lm(y ~ x))[1],
+                    xlab = "Days of sleep deprivation",
+                    ylab = "Average reaction time (ms)"))
+
+```
+
+On the $x-axis$ is days of sleep deprivation, and $y-axis$ is an aggregate measure of reaction time across a number of cognitive tasks. Reaction time increases as a function of sleep deprivation. But the order of the panels is entirely uninformative, they are simply arranged in increasing order of subject ID number, from top left to bottom right. Subject ID numbers are rarely informative, and we would therefore like to order the panels according to some other fact about the individual participants.
+
+Order Panels on mean value
+
+Let's start by ordering the panels on the participant mean reaction time, with the fastest participant in the upper-left panel.
+
++ Step 1:  is to add the required information to the data frame used in plotting. For a simple mean, we can actually use a shortcut in step 2, so this isn't required.
+
++ Step 2: Convert the variable used to separate the panels into a factor, and order it based on the mean reaction time.
+
+The key here is to use the `reorder()` function. You will first enter the variable that contains the groupings (i.e. the subject ID numbers), and then values that will be used to order the grouping variables. Finally, here you can use a shortcut to base the ordering on a function of the values, such as the mean, by entering it as the third argument.
+
+
+```{r}
+sleepstudym <- mutate(sleepstudy,
+                     Subject = reorder(Subject, Reaction, mean))
+```
+
+
+```{r}
+ggplot(sleepstudym, aes(x=Days, y=Reaction)) +
+    geom_point() +
+    stat_summary(fun.y=mean, geom="segment",
+                 aes(yend=..y.., x=0, xend=3),
+                 arrow = arrow(ends = "first", length = unit(.1, "npc"))) +
+    scale_x_continuous(breaks=0:9, expand = c(0, 0)) +
+    facet_wrap("Subject", labeller = label_both, nrow = 3)+labs(title="Ordered by mean reaction",
+        x ="Days of sleep deprivation", y = "Average reaction time (ms)")#+theme_economist()
+```
+
+## Ordening panels on other parameters 
+
+It might also be useful to order the panels based on a value from a model, such as the slope or the intercept of a linear regression. This is especially useful in making the heterogeneity in the sample easier to see. For this, We will need to fit a model, grab the subject-specific intercepts or slopes, order the paneling factor, and plot. I will ll illustrate with the `lmList` function from the `lme4` package.
+
+
+```{r }
+## Fit a linear reg model per subject  
+lmlst          <- lmList(Reaction ~ Days | Subject , data = sleepstudy)
+length(lmlst)
+
+coefs          <- coef(lmlst)%>% rownames_to_column("Subject")
+names(coefs)   <- c("Subject", "Intercept", "Slope")
+sleepstudy_SI  <- left_join(sleepstudy, coefs, by="Subject")
+
+```
+
+Reorder and plot the sleepstudy the ordered dataset according to the slope and to the intercept.  
+
+```{r}
+# 
+sleepstudy_slp <- mutate(sleepstudy_SI,
+                     Subject = reorder(Subject, Slope))
+sleepstudy_int <- mutate(sleepstudy_SI,
+                     Subject = reorder(Subject, Intercept))
+ggplot(sleepstudy_slp, aes(x=Days, y=Reaction)) +
+    geom_point(color="blue", size = 1) +
+    geom_abline(aes(intercept = Intercept, slope = Slope), color = "Darkred") +
+    scale_x_continuous(breaks=0:9) +
+    facet_wrap("Subject", labeller = label_both)+labs(title="Ordered by slope",
+        x ="Days of sleep deprivation", y = "Average reaction time (ms)")
+
+ggplot(sleepstudy_int, aes(x=Days, y=Reaction)) +
+    geom_point(color="blue", size = 1) +
+    geom_abline(aes(intercept = Intercept, slope = Slope),color = "Darkred") +
+    scale_x_continuous(breaks=0:9) +
+    facet_wrap("Subject", labeller = label_both)+labs(title="Ordered by intercept",
+        x ="Days of sleep deprivation", y = "Average reaction time (ms)")
+```
+
+
+## Fiting a simpl linear model 
+
+
++ In most cases a simple linear regression provides an adequate fit to the within-subject data.
+
++ Patterns for some subjects (e.g. 350, 352 and 371) deviate from linearity but the deviations are neither widespread nor consistent in form.
+
++ There is considerable variation in the intercept (estimated reaction time without sleep deprivation) across subjects 200 ms. up to 300 ms. and in the slope (increase in reaction time per day of sleep deprivation) - 0 ms./day up to 20 ms./day.
+
++ We can examine this variation further by plotting confidence intervals for these intercepts and slopes. Because we use a pooled variance estimate and have balanced data, the intervals have identical widths. 
+
++ We again order the subjects by increasing intercept so we can check for relationships between slopes and intercepts.
+
+```{r}
+confint(lmList(Reaction ~ Days | Subject, sleepstudy))
+print(plot(confint(lmList(Reaction ~ Days | Subject, sleepstudy),
+                   pooled = TRUE), order = 1))
+
+```
+
+
+These intervals reinforce our earlier impressions of considerable variability between subjects in both intercept and slope but little evidence of a relationship between intercept and slope.
+
+## Fitting a mixed-effects models
+
++ We begin with a linear mixed model in which the fixed effects $[\beta_0,\beta_1]$ are the representative intercept and slope for the population and the random effects $b_i=[b_{i0},b_{i1}] i=1,\dots,18$ are the deviations in intercept and slope associated with subject $i$.
++ Model formulation 
++ Model formulation 
+
+__Level 1__
+
+$Reaction_{ij} = \beta_{0j} + \beta_{1j}.Days_{ij} + \epsilon_{ij}$
+
+__Level 2___
+
+
+$\beta_{0j} = \gamma_{00} + b_{0j}$ 
+
+and 
+
+$\beta_{1j} = \gamma_{10} + b_{1j}$
+
+With 
+$$
+\begin{equation}
+\begin{pmatrix}
+b_{0j} \\\
+ b_{1j}
+\end{pmatrix}
+\sim\mathcal{N}
+\left(
+\begin{matrix}
+0 &\\\
+0
+\end{matrix}
+,
+\begin{matrix}
+ \sigma_{00}^2 & \sigma_{01}\\\
+ \sigma_{01} & \sigma_{10}^2
+\end{matrix}
+\right)
+,
+\end{equation}
+$$
+and 
+$$
+\begin{equation}
+\epsilon_{ij} \sim\mathcal{N}(0, ~\sigma^2)
+\end{equation}
+$$
+
+
+
+To fit the model we run 
+
+```{r}
+data(sleepstudy)
+library(lme4)
+library(rstanarm)
+
+fm1        <- lmer(Reaction ~ Days + ( Days | Subject ), sleepstudy )
+# The same as 
+# fm1 <- lmer ( Reaction ~ 1+ Days + (1+ Days | Subject ), sleepstudy )
+# want to suppress the intercept use -1
+summary(fm1)
+
+```
+
++ The term Days in the formula generates a model matrix $X$ with two columns, the intercept column and the numeric Days column. (The intercept is included unless suppressed.)
+
++ The term `(Days|Subject)` generates a vector-valued random effect (intercept and slope) for each of the 18 levels of the Subject factor.
+
+
+Extracting the conditional modes of the random effects
+
+```{r}
+ranef(fm1) 
+```
+
++ The random effect section indicates that there will be a random effect for the intercept and a random effect for the slope with respect to `Days` at each level of `Subject` and, the unconditional distribution of these random effect allows some tiny correlation (0.07) of the random effects for the same subject.
+ 
+ + The estimates of the fixed effects parameters are $\beta = (251.41,10.46)$  These represent a typical initial reaction time (i.e. without sleep deprivation) in the population of about 250 milliseconds, or 1/4 sec., and a typical increase in reaction time of a little more than 10 milliseconds per day of sleep deprivation.
+
++ The estimated subject-to-subject variation in the intercept corresponds
+to a standard deviation of about $25 ms$ . A 95% prediction interval on this
+random variable would roughly $\pm 50ms$ . Combining this range with a population estimated intercept of $250 ms$ . indicates that we should not be surprised by intercepts as low as $200 ms$. or as high as $300 ms$. This range is consistent with the reference lines shown in the first figures.
+
++ Similarly, the estimated subject-to-subject variation in the slope corresponds to a standard deviation of about $6 ms/day$ so we would not be surprised by slopes as low as $10.5 - 2*5.9 = - 1.3 ms/day$ or as high as $10.5+ 2*5.9 = 22.3ms/day$. 
+ 
++ The estimated residual standard deviation is about $25 ms$. leading us to
+expect a scatter around the fitted lines for each subject of up to $\pm 50 ms$.
+From the first figures above we can see that some subjects (309, 372 and 337) appear
+to have less variation than $\pm 50 ms$. about their within-subject fit but others (308, 332 and 331) may have more. 
+
++ Finally, we see the estimated within-subject correlation of the random effect for the intercept and the random effect for the slope is very low, 0.07, confirming our impression that there is little evidence of a systematic relationship between these quantities. In other words, observing a subjects initial reaction time does not give us much information for predicting whether their reaction time will be strongly affected by each day of sleep deprivation or not. It seems reasonable that we could get nearly as good a fit from a model that does not allow for correlation, which we describe next.
+
+
+## A model with uncorrelated random effects
+
+We specify the model with two distinct random effects terms, each of which has Subject as the grouping factor. The model matrix for one term is intercept only (1) and for the other term is the column for Days only, which can be written 0+Days. (The expression Days generates a column for Days and an intercept. To suppress the intercept we add 0+ to the expression; -1 also works.)
+
+
+```{r}
+fm2 = lmer(Reaction ~ 1 + Days + (1 | Subject) + (0 + Days | Subject), sleepstudy)
+## Note that the expression is 
+## NOT "1 + Days + (1 | Subject) + (Days | Subject)"
+```
+
+This means that we do have an intercept for each individual. However, this is not dependent
+on the actual effect of sleep deprivation (due to the 0). We obtain the following result:
+
+```{r }
+summary(fm2)
+```
+
+We must suppress the implicit intercept in the second random-effects term, which we do by writing it as (0+Days|Subject), read as "no intercept and Days by Subject"
+
+
+
+As in model fm01, there are two random effects for each subject
+
+```{r}
+ranef(fm2) 
+```
+
+The `Subject` factor is repeated in the "Groups" column because there were two distinct terms generating these random effects and these two terms had the same grouping factor.
+
++ Like the model `fm1`, there are two random effects for each subject
++ but no correlation has been estimated
++ The Subject factor is repeated in the Groups column because there were two distinct terms generating these random effects and these two terms had the same grouping factor.
+
+
+## Comparing the models
+
++ Model `fm1` contains model `fm2` in the sense that if the parameter values for model fm1 were constrained so as to force the correlation, and hence the covariance, to be zero, and the model were re-fit, we would get model fm2. 
+
++ The value 0, to which the correlation is constrained, is not on the boundary of the allowable parameter values.
+
+```{r }
+anova ( fm2 , fm1 )
+
+```
+
+###  Conclusions from the likelihood ratio test
+
++ The high p-value of 0.8 indicates that the model assuming dependence is not better than the
+model assuming independence. This corresponds with the low Chi-square statistic of 0.0639.
+
++ we would thus opt for the smaller model, we assume independence. Truck drivers with high
+initial reaction times are generally not affected differently by sleep deprivation than truck
+drivers who reacted quickly at first. 
+
++ This corresponds with the low correlation coefficient of 0.07 in the bigger model assuming dependence.
+Please note that R refits both models using ML instead of REML when comparing models
+using `anova`.
+
++ The `anova` function also shows the number of parameters in the model $(df)$
+, the Akaike
+Information Criterion (AIC), the Bayesian Information Criterion (BIC), the log-likelihood
+(logLik) using the estimates and the deviance. The logLik is in this case the value of the full
+maximum likelihood. The AIC and BIC are also criteria to compare the fitted models. The
+deviance equals -2*logLik, while the AIC and BIC are given by the following equations:
+
+$$AIC = deviance + 2*df$$
+
+$$BIC = deviance+ df* log(N)$$
+When using AIC to compare models for the same data, we prefer the model with the lowest
+AIC. Similarly, when using BIC we prefer the model with the lowest BIC. Alternatively, the
+REML criterion may be used to compute an REML version of AIC or BIC. However, this is not
+the case when using the `anova` function in R.
+
+# Repeated measures data for an exercise experiment
+
+## Data description 
+
+
+The data are from a study of exercise therapies, where 37 patients were assigned to one of two weightlifting treatments. In the first treatment (treatment 1), the number of repetitions was increased as subjects became stronger. In the second treatment (treatment 2), the number of repetitions was fixed but the amount of weight was increased as subjects became stronger. Measures of strength were taken at baseline (day 0), and on days 2, 4, 6, 8, 10, and 12. 
+
+
+## Fitting Conditional growth model
+
+In this example we will not be looking at the independence of the random intercept and slope, but instead we will be looking at the necessity of some of the factors. Specifically, we will be looking at the random slope with respect to the variable time and we will be looking at the fixed explanatory variable treatment. To do this we fit a mixed effects model with linear
+time dependence in the random effects part. In the fixed effects part of the model we also include interaction with the treatment. We then compare this model with the 2 variations. Our first and biggest model will be called using the following command:
+
+
+```{r  }
+library(asbio)
+
+data(exercise.repeated)
+
+mod1 <- lmer(strength~day*TRT+(day|ID),data=exercise.repeated)
+
+summary(mod1)
+
+```
+The output shows: 
+
++ an intercept and a slope with respect to time for both random and fixed
+effects. 
+
++ for the fixed effects the output also shows a slope with respect to the treatment `TRT` and a slope with respect to the interaction between treatement and day. In addition the output shows the correlations. 
+
++ `TRT` corresponds only to the subjects that followed treatement two.
+Treatement one, being the baseline treatement, is incorporated into the intercept.
+
+__Fixed effects__
+
++ estimate for the intercept is 80.132, the `day` component has an estimate of 0.117, the `treatment` has an estimate of 1.131 and the interaction between and treatment has an estimate of 0.052. This would indicate that the base strength (at day 0 and treatment one) is about 80 and is increased by about 0.12 for
+each day. Following treatment two results in an additional 1.13, while the interaction with day increases strength by another 0.05 for each day.
+
+
+__Random effects__ 
+
++ intercept for each individual may vary with a standard deviation of about 3.2, while the variation in the slope has a standard deviation of about 0.2 
+
++ low dependence between intercept and day with a correlation coefficient of -0.03.
+
++ While we will not fit a model without dependence in this example, the low correlation coefficient indicates that such a model would probably be appropriate. 
+
+Next we call a smaller model that does not include the random slope effect, but the
+intercept only. We use the following R command:
+
+
+
+```{r }
+mod2 <- lmer(strength~day*TRT+(1|ID),data=exercise.repeated)
+summary(mod2)
+
+```
+
+
++ same parameters for the fixed effects. However, the estimates are
+slightly different.
+
++ For the random effects the output shows an intercept only and thus, no
+correlation. For the fixed effects the output shows that the estimate for the intercept is 80.112, the day component has an estimate of 0.121, the treatment has an estimate of 1.21 and the interaction between day and treatment has an estimate of 0.031. This would indicate that the base strength is about 80 and is increased by about 0.12 for each day. Following treatment two results in an additional 1.21, while the interaction with day increases strength
+by another 0.03 for each day. For the random effects the output shows that the intercept
+for each individual may vary with a standard deviation of about 3.3, being slightly higher
+than the bigger model.
+
+The next step is to compare both models to see if the random `day` slope effect is significant.
+Here we use the `anova` command in `R` as follows:
+
+```{r }
+
+anova(mod1,mod2)
+
+```
+
+
+The `anova` gives a large Chi-square statistic of 60.428 and a really small p-value nearing 0,
+this shows that the slope effect is significant and we conclude that the random effects on the
+slopes are necessary. Now we like to know whether the fixed explanatory variable, treatement,
+is necessary. Thus we set up a model without the treatement effect as fixed effect using the
+following command:
+
+```{r }
+
+mod3 =lmer(strength~day+(day|ID),data=exercise.repeated)
+summary(mod3)
+ 
+```
+
++ an intercept and a slope with respect to day for both random and fixed
+effects. In addition the output shows the correlation between intercept and slope with
+respect to day.
+
++ __fixed effects__: the output shows that the estimate for the intercept is now 80.77 and
+the day component has an estimate of 0.146. This would indicate that the base strength is
+about 81 and is increased by about 0.15 for each day. Both estimates are slightly higher
+compared to the biggest model.
+
++ __random effects___: the output shows that the intercept for each individual may vary with
+a standard deviation of about 3.2, while the variation in the slope has a standard deviation
+of about 0.2 The output also shows a very low dependence between intercept and day with
+a correlation of zero, indicating again that a model without dependence would probably be
+appropriate.
+
+Again we use the anova command to compare this model with the biggest model, mod1.
+
+
+```{r}
+anova(mod1,mod3)
+```
+
+
+The `anova` function gives a p-value of 0.38 and a Chi-squared statistic of 1.93 and this would indicate using the model without program. So after comparing 3 different models we opt for the strmod2 model, which has the following formula:
+
+`mod2: strength ~ day + (day | ID)`
+
+Thus, the strength of each subject depends on an intercept and a time effect slope for both
+the fixed as well as the random effects parts.
+
+## predict() function for lmer mixed effects models
+
+consider for example the model `mod3` 
+```{r}
+summary(mod3)
+```
+
+suppose we want to prdict the `strength` at dat 14 for subjet `37`. In this acse we can simply make a new table: 
+
+
+```{r}
+newdata <- tribble(
+  ~ID, ~TRT,~day,
+  #--|--|----
+  37,1,14
+)
+
+predict(mod3,newdata)
+
+```
+### how is this value computed 
+
+There is an overall intercept of 80.77546  for the model, with a day coefficient of 0.14619. So for day = 14 you predict an average  82.81946 `strength`.
+
+Then we use `ranef` to get the difference of each random-effect intercept from the mean intercept at the next higher level of nesting:
+
+
+```{r}
+ranef(mod3)
+
+```
+The values for subject 37  at day = 14 will differ from that average value of 82.81946 by the sum of both the fixed effect and the random effects
+
+```{r}
+82.81946 - 0.83401629 + 14*0.05536425
+```
+
+Another usefull function from the `merTools` package is the  `predictInterval` to predict outcome for new data. The function has a number of user configurable options. In this example, we use the original data sleepstudy as the newdata. We pass the function the fm1 model we fit above. We also choose a 95% interval with level = 0.95, though we could choose a less conservative prediction interval. We make 1,000 simulations for each observation n.sims = 1000. We set the point estimate to be the median of the simulated values, instead of the mean. We ask for the linear predictor back, if we fit a logistic regression, we could have asked instead for our predictions on the probability scale instead. Finally, we indicate that we want the predictions to incorporate the residual variance from the model - an option only available for lmerMod objects.
+
+
+```{r}
+library(merTools)
+PI <- predictInterval(merMod = fm1, newdata = sleepstudy, 
+                        level = 0.95, n.sims = 1000,
+                        stat = "median", type="linear.prediction",
+                        include.resid.var = TRUE)
+head(PI)
+```
+
+The following figure displays the output graphically for the first 30 observations.
+
+```{r}
+library(ggplot2);
+ggplot(aes(x=1:30, y=fit, ymin=lwr, ymax=upr), data=PI[1:30,]) +
+  geom_point() + 
+  geom_linerange() +
+  labs(x="Index", y="Prediction w/ 95% PI") + theme_bw()
+```
+
+
+
+# Exercises
+
+
+1.  Check the structure of documentation, structure and a summary of the `Orthodont` data set.
+  
+    This dataset was collected by the Dental School of North Carolina, investigated the distance from the pituitary to     the ptergomaxillary fissure (Distance). There were 27 subjects (Subject)
+    (16 boys, 11 girls - Sex) each measured at 4 ages (8, 10, 12, 14 - age). Of interest is the difference between the     boys and girls, after accounting for the effects of age and subject to subject variability.
+    
+    a. Create an `xyplot` of the `distance` versus `age` by `Subject` for the female subjects
+    only.  You can use the optional argument _subset = Sex == "Female"_ in the call to `xyplot` to achieve this. Use
+    the optional argument `type = c("g","p","r")` to add reference lines to each panel.
+    
+    b. Enhance the plot by choosing an aspect ratio for which the typical slope of the reference line is around 45$^o$. You can set it      manually (something like `aspect = 4`) or with an automatic specification (`aspect = "xy"`).  Change the layout
+    so the panels form one row (`layout = c(11,1)`).
+    
+    c. Order the panels according to increasing response at age 8. This is achieved with the optional argument `index.cond`
+    which is a function  of arguments `x` and `y`.  In this case you could use `index.cond = function(x,y) y[x == 8]`.
+    Add meaningful axis labels.  Your final plot should be like
+    
+    d. Fit a linear mixed model to the data for the females only with random effects for the intercept and for the slope by subject,
+    allowing for correlation of these random effects within subject. Relate the fixed effects and the random effects' variances and
+    covariances to the variability shown in the figure.
+    
+    e. Produce a ``caterpillar plot'' of the random effects for intercept and slope.  Does the plot indicate correlated random effects?
+  
+    f. Consider what the Intercept coefficient and random effects represents.  What will happen if you center the ages by
+    subtracting 8 (the baseline year) or 11 (the middle of the age range)?
+    
+    g. Repeat for the data from the male subjects.
+  
+
+2.  Produce a model for both the female and the male subjects allowing for differences by sex in the fixed-effects for intercept (probably with respect to the centered age range) and slope.
+
+# References
+
+http://lme4.r-forge.r-project.org/slides/2011-03-16-Amsterdam/2Longitudinal.pdf
+http://lme4.r-forge.r-project.org/book/Ch4.pdf
+
+

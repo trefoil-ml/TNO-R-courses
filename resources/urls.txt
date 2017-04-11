@@ -1,0 +1,24 @@
+### lme4book
+http://lme4.r-forge.r-project.org/book/Ch4.pdf
+http://lme4.r-forge.r-project.org/book/Ch1.pdf
+http://lme4.r-forge.r-project.org/slides/2011-03-16-Amsterdam/2Longitudinal.pdf
+http://lme4.r-forge.r-project.org/slides/2011-03-16-Amsterdam/2Longitudinal.Rnw
+
+
+http://www.ssicentral.com/supermix/Documentation/ClustSLS.pdf
+
+https://it.unt.edu/sites/default/files/linearmixedmodels_jds_dec2010.pdf
+
+https://publish.illinois.edu/liangf/teaching/stat-424/rcode-longitudinal-analysis/
+
+http://stats.stackexchange.com/questions/174203/predict-function-for-lmer-mixed-effects-models/174227
+
+http://stats.stackexchange.com/questions/58745/using-lmer-for-repeated-measures-linear-mixed-effect-model
+
+http://lme4.r-forge.r-project.org/slides/2010-09-23-Rahway/
+
+
+#### rstanarm 
+http://127.0.0.1:12714/session/Rvig.163c3eea3155.html
+http://127.0.0.1:12714/library/rstanarm/doc/glmer.html
+https://tjmahr.github.io/visualizing-uncertainty-rstanarm/
