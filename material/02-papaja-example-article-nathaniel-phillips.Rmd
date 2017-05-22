@@ -1,0 +1,146 @@
+---
+title             : "Who are you trying to impress? When does showing skin increase attractiveness in social media."        # This is the title
+shorttitle        : "facebook"           # This is the running head
+author: 
+  - name          : Nathaniel Phillips     # First author name
+    affiliation   : 1               # First author affiliation
+    corresponding : yes           # Define only one corresponding author
+    address       : Missionsstrasse 62A 4053 Basel Switzerland
+    email         : nathaniel.phillips@unibas.ch
+  - name          : Joerg Rieskamp         # Second author name
+    affiliation   : "1"             # Second author affiliation
+affiliation:
+  - id            : 1
+    institution   : University of Basel
+
+abstract: |                      # Write your abstract in the next lines
+  Does the presence of skin help or hurt dateability ratings in social media profiles? To answer this question, we had 1,000 participants access how dateable people were based on their Facebook profiles. We found strong evidence for an interaction between sex and skin. When men did not wear shirts, their dateability scored decreased. For women, the effect was reversed.
+  
+note: |                           # Add an optional author's note
+  The first author is at the Economic Psychology department at the University of Basel.
+  
+keywords: "apa, R, markdown"     # Article keywords separated by commas
+
+wordcount: X                     # How many words are there? (You must do manually)
+
+class: man                       # Document class, change to pub or doc for other formats!
+lang: english
+figsintext: yes                  # Should figures be in text?
+lineno: yes                       # Should line numbers be displayed?
+bibliography:
+  - phillips2017apa_references.bib  # What is the name of the bibliography file?
+
+output: papaja::apa6_pdf         # Just leave this
+---
+
+```{r message = FALSE, warning = FALSE}
+# Start by loading all libraries necessary for the code to work
+library("papaja")
+library("yarrr")
+```
+
+```{r}
+# Read in all data files used in document
+facebook <- read.table("http://nathanieldphillips.com/wp-content/uploads/2016/04/facebook.txt", 
+                       sep = "\t", 
+                       header = TRUE)
+```
+
+
+Nudity has long been studied in the psychological literature [@latour1990female; @alexander1986differences], usually in the context of advertising. Social media sites such as Facebook are ways for people to express and advertise themselves to their peers. People's behavior on Facebook has been measured with respect to personality types. For example, @ross2009personality found that personality factors were not very influential on Facebook use.
+
+Similar to social media sites such as Facebook, online dating has become a popular medium for people to connect. For example @ellison2006managing studied how people present themselves in online dating profiles.
+
+However, no researchers have studied the connection between nudity and social media. The purpose of this study is to determine to what extent nudity affects perceptions of dateability in social media. In the study, we asked single participants to view Facebook profiles of people that were either wearing a shirt or not in their profile picture. They then rated how dateable each person was.
+
+# Method
+
+
+## Participants
+
+`r nrow(facebook)` participants were recruited from the University of Basel to participate in the study in exchange for 5 Swiss Francs. The mean age was `r round(mean(facebook$age), 0)` and there were `r sum(facebook$sex == "f")` females.
+
+## Materials
+
+Each profile was displayed as a static screenshot. The primary measure was a dateability score on a scale from 0 to 100.
+
+## Procedure
+
+Participants viewed a static profile for 60 seconds. When the profile disappeared, participants gave their ratings.
+
+# Results
+
+A histogram of dateability scores is presented in Figure 1. The mean dateability score was `r round(mean(facebook$dateability), 0)`.
+
+```{r fig.cap = "Distribution of dateability scores", fig.width = 5, fig.height = 5}
+# Create a histogram of dateability scores
+hist(facebook$dateability, 
+     xlab = "Dateability",
+     ylab = "",
+     main = "",
+     yaxt = "n",
+     ylim = c(0, 200), 
+     col = "skyblue")
+
+abline(v = mean(facebook$dateability),
+       lty = 2)
+
+text(x = mean(facebook$dateability), 
+     y = 190, 
+     labels = paste0("Mean = ", round(mean(facebook$dateability), 2)), 
+     pos = 4)
+```
+
+Next we looked to see if there was a relationship between whether a person wore a shirt in their prifle photo or not on their dateability scores. A pirateplot showing distributions of scores split by sex and whether people wore a shirt or not is presented in Figure 2:
+
+```{r fig.cap = "Distribution of dateability scores by sex and shirt. The data clearly show that not wearing a shirt increases scores for women, but decreases scores for men.", fig.width = 8, fig.height = 6}
+pirateplot(dateability ~ sex + shirtless, 
+           data = facebook)
+```
+
+Descriptively, the data show a clear interaction between sex and shirt wearing. To test this interaction, we conducted an ANOVA. The ANOVA showed a significant interaction between sex and shirt wearing on scores (see Table 1).
+
+```{r results='asis'}
+# This chunk will create table 1
+
+# Create the ANOVA
+sex.shirt.aov <- aov(dateability ~ sex * shirtless, 
+           data = facebook)
+
+# Format ANOVA table using apa_print()
+sex.shirt.aov.tbl <- papaja::apa_print(summary(sex.shirt.aov))$table
+
+# Print the table using apa_table()
+papaja::apa_table(sex.shirt.aov.tbl, caption = "ANOVA on dateability ratings")
+```
+
+
+```{r}
+age.date.cor <- cor.test(facebook$age, facebook$dateability)
+```
+
+The relationship between age and dateability is shown in Figure 2. A correlation test showed that the relationship was non-significant (`r paste0("t(", age.date.cor$parameter, ") = ", round(age.date.cor$statistic, 2), " p = ", round(age.date.cor$p.value, 2))`)
+
+```{r fig.cap="Relationship between age and dateability. The relationship was not significant."}
+# Figure 2
+plot(x = facebook$age,
+     y = facebook$date,
+     xlab = "Age", 
+     ylab = "Dateability",
+     pch = 16, 
+     col = yarrr::piratepal(palette = "basel", trans = .4))
+```
+
+
+
+# Discussion
+
+This fake study showed an interesting interaction between nudity and sex on attraction in social media profiles. More (real) research is needed.
+
+
+# References
+
+
+\setlength{\parindent}{-0.5in}
+\setlength{\leftskip}{0.5in}
+\setlength{\parskip}{8pt}

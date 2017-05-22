@@ -18,6 +18,7 @@ In R `lme4` is the canonical  package for implementing multilevel models in R, t
 that depend on and enhance its feature set, including Bayesian extensions. 
 To install the needed packages, we just run:
 
+
 ```{r eval=FALSE, results='hide', echo=TRUE}
 #### Main version
 list.of.packages <- c("tidyverse", "lme4", "arm")
@@ -182,6 +183,7 @@ While all of the above techniques are valid approaches to this problem,  they ar
 MLexamp.6 <- lmer(extro ~ open + agree + social + (1|school), data=lmm.data, REML = F)
 summary(MLexamp.6)
 ```
+
 2. Optional arguments: 
    + `family = gaussian`:  can be used to specify other distributions (e.g. binomial, poisson, etc.). 
 
@@ -296,7 +298,7 @@ coef(MLexamp.8)
 To extract the fitted or predicted values based on the model parameters and data, here the predicted values are assigned the name yhat: 
 
 ```{r}
- yhat <- predict(MLexamp.8)
+ yhat <- predict(MLexamp.8)# , data = newdata)
  abs(100*(lmm.data$extro[1:10]-yhat[1:10])/ lmm.data$extro[1:10]) 
  summary(yhat) 
 ```

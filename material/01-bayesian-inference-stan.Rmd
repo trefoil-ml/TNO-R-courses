@@ -1,0 +1,38 @@
+---
+date: "2017-04-14"
+title: "Bayesian inference with Stan"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    numbe\epsilon_sections: FALSE
+author: "Hicham Zmarrou"
+---
+
+
+```{r }
+library(rstanarm)
+library(lme4)
+## lmer
+class_fm1 <- lmer(Reaction ~ Days + ( Days | Subject ), sleepstudy )
+summary(class_fm1)  
+y_rep_class <- predict(class_fm1)
+
+## rstanarm
+stan_fm1 <- stan_lmer(Reaction ~ Days + ( Days | Subject ), sleepstudy )
+
+#CORES = 4 # adjust for your machine!
+stan_fm1 = stan_lmer(Reaction ~ Days + ( Days | Subject ),
+              data = sleepstudy, 
+              prior = student_t(df = 5, location = 0),
+              prior_intercept = student_t(df = 5, location = 0))
+
+summary(stan_fm1)
+y_rep_stan <- posterior_predict(stan_fm1)
+
+```
+
+
+The output under _Error terms_ in `rstanarm` is comparable to the output under _Random effects_ in `lme4`. But since `rstanarm` is largely Bayesian, the phrases "fixed effects" and "random effects" are avoided, although there are `fixef` and `ranef` extractor functions for compatibility with `lme4`. Either way, you can think of the (1| Subject) term as an error in the sense that the Days predictor is unable to explain some variation in Reaction.
+
+
